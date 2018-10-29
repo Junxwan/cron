@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"fmt"
 	"log"
 	"runtime"
 	"sort"
@@ -14,6 +15,7 @@ type Cron struct {
 	entries  []*Entry
 	stop     chan struct{}
 	add      chan *Entry
+	remove   chan string
 	snapshot chan []*Entry
 	running  bool
 	ErrorLog *log.Logger
@@ -82,6 +84,7 @@ func NewWithLocation(location *time.Location) *Cron {
 		entries:  nil,
 		add:      make(chan *Entry),
 		stop:     make(chan struct{}),
+		remove:   make(chan string),
 		snapshot: make(chan []*Entry),
 		running:  false,
 		ErrorLog: nil,
@@ -122,6 +125,26 @@ func (c *Cron) Schedule(name string, schedule Schedule, cmd Job) {
 	}
 
 	c.add <- entry
+}
+
+func (c *Cron) Remove(name string) error {
+	if c.running {
+		c.remove <- name
+		return nil
+	}
+
+	return c.removeEntry(name)
+}
+
+func (c *Cron) removeEntry(name string) error {
+	for i, e := range c.entries {
+		if e.Name == name {
+			c.entries = append(c.entries[:i], c.entries[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Job that does not exist")
 }
 
 // Entries returns a snapshot of the cron entries.
@@ -210,6 +233,9 @@ func (c *Cron) run() {
 				now = c.now()
 				newEntry.Next = newEntry.Schedule.Next(now)
 				c.entries = append(c.entries, newEntry)
+
+			case removeName := <-c.remove:
+				c.removeEntry(removeName)
 
 			case <-c.snapshot:
 				c.snapshot <- c.entrySnapshot()

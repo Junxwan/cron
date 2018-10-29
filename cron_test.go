@@ -377,6 +377,44 @@ func TestJob(t *testing.T) {
 	}
 }
 
+func TestRemove(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	cron := New()
+	cron.AddFunc("jon", "* * * * * ?", func() { wg.Done() })
+
+	cron.Remove("jon")
+
+	cron.Start()
+	defer cron.Stop()
+
+	select {
+	case <-time.After(OneSecond):
+	case <-wait(wg):
+		t.FailNow()
+	}
+}
+
+func TestRemoveWhileRunning(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	cron := New()
+	cron.AddFunc("jon", "* * * * * ?", func() { wg.Done() })
+
+	cron.Start()
+	defer cron.Stop()
+
+	cron.Remove("jon")
+
+	select {
+	case <-time.After(OneSecond):
+	case <-wait(wg):
+		t.FailNow()
+	}
+}
+
 type ZeroSchedule struct{}
 
 func (*ZeroSchedule) Next(time.Time) time.Time {
