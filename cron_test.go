@@ -396,6 +396,30 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestAddEntryLocation(t *testing.T) {
+	cron := New()
+	cron.AddFunc("job1", "* * * * * ?", func() {})
+	cron.AddFunc("job2", "* * * * * ?", func() {})
+
+	l := make(map[string]*time.Location)
+
+	t1, _ := time.LoadLocation("Asia/Shanghai")
+	t2, _ := time.LoadLocation("America/Los_Angeles")
+
+	l["job1"] = t1
+	l["job2"] = t2
+
+	cron.AddEntryLocation(l)
+
+	if cron.entries[0].Location != t1 {
+		t.Errorf("job1 Location error")
+	}
+
+	if cron.entries[1].Location != t2 {
+		t.Errorf("job2 Location error")
+	}
+}
+
 func TestRemoveWhileRunning(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

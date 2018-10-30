@@ -12,14 +12,15 @@ import (
 // specified by the schedule. It may be started, stopped, and the entries may
 // be inspected while running.
 type Cron struct {
-	entries  []*Entry
-	stop     chan struct{}
-	add      chan *Entry
-	remove   chan string
-	snapshot chan []*Entry
-	running  bool
-	ErrorLog *log.Logger
-	location *time.Location
+	entries       []*Entry
+	stop          chan struct{}
+	add           chan *Entry
+	remove        chan string
+	snapshot      chan []*Entry
+	running       bool
+	ErrorLog      *log.Logger
+	location      *time.Location
+	entryLocation map[string]*time.Location
 }
 
 // Job is an interface for submitted cron jobs.
@@ -52,6 +53,9 @@ type Entry struct {
 
 	// The Job's name
 	Name string
+
+	//  The Job's timezone
+	Location *time.Location
 }
 
 // byTime is a wrapper for sorting the entry array by time
@@ -147,6 +151,14 @@ func (c *Cron) removeEntry(name string) error {
 	return fmt.Errorf("Job that does not exist")
 }
 
+func (c *Cron) AddEntryLocation(loc map[string]*time.Location) {
+	for _, v := range c.entries {
+		if t, ok := loc[v.Name]; ok == true {
+			v.Location = t
+		}
+	}
+}
+
 // Entries returns a snapshot of the cron entries.
 func (c *Cron) Entries() []*Entry {
 	if c.running {
@@ -198,7 +210,11 @@ func (c *Cron) run() {
 	// Figure out the next activation times for each entry.
 	now := c.now()
 	for _, entry := range c.entries {
-		entry.Next = entry.Schedule.Next(now)
+		if entry.Location == nil {
+			entry.Next = entry.Schedule.Next(now)
+		} else {
+			entry.Next = entry.Schedule.Next(time.Now().In(entry.Location))
+		}
 	}
 
 	for {
@@ -217,7 +233,12 @@ func (c *Cron) run() {
 		for {
 			select {
 			case now = <-timer.C:
-				now = now.In(c.location)
+				if c.entries[0].Location == nil {
+					now = now.In(c.location)
+				} else {
+					now = now.In(c.entries[0].Location)
+				}
+
 				// Run every entry whose next time was less than now
 				for _, e := range c.entries {
 					if e.Next.After(now) || e.Next.IsZero() {
