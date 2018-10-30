@@ -299,6 +299,8 @@ func (c *Cron) entrySnapshot() []*Entry {
 			Next:     e.Next,
 			Prev:     e.Prev,
 			Job:      e.Job,
+			Location: e.Location,
+			Name:     e.Name,
 		})
 	}
 	return entries
